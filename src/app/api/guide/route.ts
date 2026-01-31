@@ -73,6 +73,13 @@ IMPORTANT CONTEXT:
 ${location ? `- User's current location: ${location.latitude}, ${location.longitude} (${location.address || 'address unknown'})` : '- No location provided'}
 ${image ? '- User has shared a photo for you to identify and discuss' : ''}
 
+MAPS FEATURE:
+When suggesting places to visit, you can include map links that will open in the user's maps app.
+Use this format: [[MAP:Place Name:latitude:longitude]]
+Example: [[MAP:Tower of London:51.5081:-0.0759]]
+
+The app will render these as tappable "Navigate" buttons. Include 1-3 map links when recommending specific places.
+
 Respond naturally and helpfully. Keep responses concise but informative (2-4 paragraphs typically). If you can identify a specific location from the image or coordinates, do so with confidence.`
       }
     ]

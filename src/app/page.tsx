@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { characters, Character } from '@/lib/characters'
 import { 
   MapPin, Camera, Send, Loader2, Menu, X, Crown, 
-  Compass, LogIn, LogOut, Sparkles, ChevronDown 
+  Compass, LogIn, LogOut, Sparkles, ChevronDown, Navigation 
 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 
@@ -21,6 +21,68 @@ interface LocationData {
   latitude: number
   longitude: number
   address?: string
+}
+
+interface MapLink {
+  name: string
+  lat: number
+  lng: number
+}
+
+// Parse map links from AI response: [[MAP:Place Name:lat:lng]]
+function parseMapLinks(content: string): { text: string; maps: MapLink[] } {
+  const mapRegex = /\[\[MAP:([^:]+):([0-9.-]+):([0-9.-]+)\]\]/g
+  const maps: MapLink[] = []
+  let match
+  
+  while ((match = mapRegex.exec(content)) !== null) {
+    maps.push({
+      name: match[1],
+      lat: parseFloat(match[2]),
+      lng: parseFloat(match[3])
+    })
+  }
+  
+  // Remove map tokens from text
+  const text = content.replace(mapRegex, '').trim()
+  
+  return { text, maps }
+}
+
+function getMapsUrl(lat: number, lng: number, name: string) {
+  // Check if iOS
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+  if (isIOS) {
+    return `maps://maps.apple.com/?q=${encodeURIComponent(name)}&ll=${lat},${lng}`
+  }
+  // Default to Google Maps (works on Android and web)
+  return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
+}
+
+function MessageContent({ content }: { content: string }) {
+  const { text, maps } = parseMapLinks(content)
+  
+  return (
+    <div>
+      <p className="whitespace-pre-wrap">{text}</p>
+      {maps.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-slate-600 flex flex-wrap gap-2">
+          {maps.map((map, idx) => (
+            <a
+              key={idx}
+              href={getMapsUrl(map.lat, map.lng, map.name)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-lg text-sm font-medium transition"
+            >
+              <Navigation className="w-3.5 h-3.5" />
+              {map.name}
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function Home() {
@@ -399,7 +461,11 @@ export default function Home() {
                     className="max-w-full rounded-lg mb-2"
                   />
                 )}
-                <p className="whitespace-pre-wrap">{msg.content}</p>
+                {msg.role === 'assistant' ? (
+                  <MessageContent content={msg.content} />
+                ) : (
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                )}
               </div>
             </div>
           ))}

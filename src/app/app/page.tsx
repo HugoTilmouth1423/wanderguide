@@ -515,15 +515,44 @@ export default function Home() {
     )
   }
   
-  function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      setImagePreview(e.target?.result as string)
-    }
-    reader.readAsDataURL(file)
+    // Compress image before uploading
+    const compressed = await compressImage(file, 1200, 0.8)
+    setImagePreview(compressed)
+  }
+  
+  // Compress image to max dimension and quality
+  function compressImage(file: File, maxDimension: number, quality: number): Promise<string> {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')!
+      const img = new Image()
+      
+      img.onload = () => {
+        // Calculate new dimensions
+        let { width, height } = img
+        if (width > height && width > maxDimension) {
+          height = (height * maxDimension) / width
+          width = maxDimension
+        } else if (height > maxDimension) {
+          width = (width * maxDimension) / height
+          height = maxDimension
+        }
+        
+        canvas.width = width
+        canvas.height = height
+        ctx.drawImage(img, 0, 0, width, height)
+        
+        // Convert to JPEG with compression
+        const compressed = canvas.toDataURL('image/jpeg', quality)
+        resolve(compressed)
+      }
+      
+      img.src = URL.createObjectURL(file)
+    })
   }
   
   async function sendMessage() {

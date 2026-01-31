@@ -1,50 +1,11 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-
-// Web Speech API types
-interface SpeechRecognitionResult {
-  readonly length: number
-  readonly isFinal: boolean
-  [index: number]: { transcript: string; confidence: number }
-}
-
-interface SpeechRecognitionResultList {
-  readonly length: number
-  [index: number]: SpeechRecognitionResult
-}
-
-interface SpeechRecognitionEvent extends Event {
-  results: SpeechRecognitionResultList
-}
-
-interface SpeechRecognitionInstance {
-  continuous: boolean
-  interimResults: boolean
-  lang: string
-  start(): void
-  stop(): void
-  onresult: ((event: SpeechRecognitionEvent) => void) | null
-  onerror: ((event: Event) => void) | null
-  onend: (() => void) | null
-}
-
-interface SpeechRecognitionConstructor {
-  new (): SpeechRecognitionInstance
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition?: SpeechRecognitionConstructor
-    webkitSpeechRecognition?: SpeechRecognitionConstructor
-  }
-}
 import { createClient } from '@/lib/supabase/client'
 import { characters, Character } from '@/lib/characters'
 import { 
   MapPin, Camera, Send, Loader2, Menu, X, Crown, 
-  Compass, LogIn, LogOut, Sparkles, ChevronDown, Navigation,
-  Mic, MicOff, Volume2, VolumeX
+  Compass, LogIn, LogOut, Sparkles, ChevronDown, Navigation
 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 
@@ -140,13 +101,8 @@ export default function Home() {
   const [authLoading, setAuthLoading] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
-  const [voiceEnabled, setVoiceEnabled] = useState(false)
-  const [isListening, setIsListening] = useState(false)
-  const [isSpeaking, setIsSpeaking] = useState(false)
-  const [hasSpeechRecognition, setHasSpeechRecognition] = useState(false)
   
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
   
@@ -175,90 +131,11 @@ export default function Home() {
     if (!hasSeenOnboarding) {
       setShowOnboarding(true)
     }
-    // Restore voice preference
-    const savedVoice = localStorage.getItem('wanderguide_voice')
-    if (savedVoice === 'true') {
-      setVoiceEnabled(true)
-    }
   }, [])
   
-  // Initialize speech recognition
-  useEffect(() => {
-    const SpeechRecognitionAPI = typeof window !== 'undefined' 
-      ? (window.SpeechRecognition || window.webkitSpeechRecognition) 
-      : undefined
-    
-    if (SpeechRecognitionAPI) {
-      setHasSpeechRecognition(true)
-      recognitionRef.current = new SpeechRecognitionAPI()
-      recognitionRef.current.continuous = false
-      recognitionRef.current.interimResults = false
-      recognitionRef.current.lang = 'en-US'
-      
-      recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
-        const transcript = event.results[0][0].transcript
-        setInput(transcript)
-        setIsListening(false)
-      }
-      
-      recognitionRef.current.onerror = () => {
-        setIsListening(false)
-      }
-      
-      recognitionRef.current.onend = () => {
-        setIsListening(false)
-      }
-    }
-  }, [])
-  
-  function toggleVoice() {
-    const newValue = !voiceEnabled
-    setVoiceEnabled(newValue)
-    localStorage.setItem('wanderguide_voice', String(newValue))
-    if (!newValue) {
-      window.speechSynthesis?.cancel()
-      setIsSpeaking(false)
-    }
-  }
-  
-  function startListening() {
-    if (recognitionRef.current) {
-      setIsListening(true)
-      recognitionRef.current.start()
-    }
-  }
-  
-  function stopListening() {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop()
-      setIsListening(false)
-    }
-  }
-  
-  function speakText(text: string) {
-    if (!voiceEnabled || !window.speechSynthesis) return
-    
-    // Remove map tokens before speaking
-    const cleanText = text.replace(/\[\[MAP:[^\]]+\]\]/g, '')
-    
-    window.speechSynthesis.cancel()
-    const utterance = new SpeechSynthesisUtterance(cleanText)
-    utterance.rate = 1.0
-    utterance.pitch = 1.0
-    utterance.onstart = () => setIsSpeaking(true)
-    utterance.onend = () => setIsSpeaking(false)
-    utterance.onerror = () => setIsSpeaking(false)
-    window.speechSynthesis.speak(utterance)
-  }
-  
-  function completeOnboarding(enableLocation: boolean, enableVoice: boolean) {
+  function completeOnboarding(enableLocation: boolean) {
     localStorage.setItem('wanderguide_onboarding', 'true')
     setShowOnboarding(false)
-    
-    if (enableVoice) {
-      setVoiceEnabled(true)
-      localStorage.setItem('wanderguide_voice', 'true')
-    }
     
     if (enableLocation) {
       getLocation()
@@ -376,18 +253,12 @@ export default function Home() {
         throw new Error(data.error)
       }
       
-      const assistantMessage = {
+      setMessages(prev => [...prev, {
         id: Date.now().toString(),
-        role: 'assistant' as const,
+        role: 'assistant',
         content: data.response,
         character: data.character
-      }
-      setMessages(prev => [...prev, assistantMessage])
-      
-      // Speak the response if voice is enabled
-      if (voiceEnabled) {
-        speakText(data.response)
-      }
+      }])
       
       // Update remaining queries
       if (queriesRemaining !== null) {
@@ -566,42 +437,42 @@ export default function Home() {
                 <p className="text-xs text-slate-500 uppercase tracking-wide">Try asking</p>
                 <div className="flex flex-wrap justify-center gap-2">
                   <button
-                    onClick={() => setInput("What interesting things are near me?")}
+                    onClick={() => setInput("So what's around here then?")}
                     className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-full text-sm transition"
                   >
-                    🗺️ What&apos;s near me?
+                    🗺️ What&apos;s around here?
                   </button>
                   <button
-                    onClick={() => setInput("Tell me about the history of this area")}
+                    onClick={() => setInput("What's the story with this area?")}
                     className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-full text-sm transition"
                   >
-                    📜 Local history
+                    📜 What&apos;s the story?
                   </button>
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-full text-sm transition"
                   >
-                    📸 Identify something
+                    📸 What&apos;s this?
                   </button>
                 </div>
                 <div className="flex flex-wrap justify-center gap-2">
                   <button
-                    onClick={() => setInput("Where's a good place for lunch nearby?")}
+                    onClick={() => setInput("I'm getting hungry - anywhere good to eat round here?")}
                     className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-full text-sm transition"
                   >
-                    🍽️ Food nearby
+                    🍽️ Where should I eat?
                   </button>
                   <button
-                    onClick={() => setInput("What are the top 3 things I should see here?")}
+                    onClick={() => setInput("If I only had an hour here, what should I definitely see?")}
                     className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-full text-sm transition"
                   >
-                    ⭐ Top 3 sights
+                    ⭐ Must-sees?
                   </button>
                   <button
-                    onClick={() => setInput("Tell me something surprising about this place")}
+                    onClick={() => setInput("Come on, tell me something most tourists don't know about this place")}
                     className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-full text-sm transition"
                   >
-                    🎭 Hidden stories
+                    🤫 Secret spots
                   </button>
                 </div>
               </div>
@@ -612,22 +483,22 @@ export default function Home() {
           {messages.length > 0 && messages.length < 6 && !isLoading && (
             <div className="flex flex-wrap justify-center gap-2 mt-4">
               <button
-                onClick={() => setInput("Tell me more about that")}
+                onClick={() => setInput("Oh interesting - tell me more about that")}
                 className="px-3 py-1.5 bg-slate-700/50 hover:bg-slate-600 rounded-full text-xs transition"
               >
                 Tell me more
               </button>
               <button
-                onClick={() => setInput("What else is nearby?")}
+                onClick={() => setInput("Nice! What else is worth checking out nearby?")}
                 className="px-3 py-1.5 bg-slate-700/50 hover:bg-slate-600 rounded-full text-xs transition"
               >
-                What else is nearby?
+                What else?
               </button>
               <button
-                onClick={() => setInput("Any hidden gems around here?")}
+                onClick={() => setInput("OK but what about somewhere the locals go?")}
                 className="px-3 py-1.5 bg-slate-700/50 hover:bg-slate-600 rounded-full text-xs transition"
               >
-                Hidden gems
+                Local spots
               </button>
             </div>
           )}
@@ -744,34 +615,7 @@ export default function Home() {
                 className="hidden"
               />
               
-              {/* Voice toggle */}
-              <button
-                onClick={toggleVoice}
-                className={`p-3 rounded-xl transition ${
-                  voiceEnabled ? 'bg-purple-600 text-white' : 'bg-slate-700 hover:bg-slate-600'
-                }`}
-                title={voiceEnabled ? 'Disable voice responses' : 'Enable voice responses'}
-              >
-                {voiceEnabled ? (
-                  isSpeaking ? <Volume2 className="w-5 h-5 animate-pulse" /> : <Volume2 className="w-5 h-5" />
-                ) : (
-                  <VolumeX className="w-5 h-5" />
-                )}
-              </button>
             </div>
-            
-            {/* Voice input button */}
-            {hasSpeechRecognition && (
-              <button
-                onClick={isListening ? stopListening : startListening}
-                className={`p-3 rounded-xl transition ${
-                  isListening ? 'bg-red-600 text-white animate-pulse' : 'bg-slate-700 hover:bg-slate-600'
-                }`}
-                title={isListening ? 'Stop listening' : 'Voice input'}
-              >
-                {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-              </button>
-            )}
             
             {/* Text input */}
             <div className="flex-1 relative">
@@ -780,7 +624,7 @@ export default function Home() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                placeholder={isListening ? "Listening..." : "Ask about this place..."}
+                placeholder="Ask me anything..."
                 className="w-full bg-slate-700 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
               <button
@@ -837,60 +681,38 @@ export default function Home() {
               <div className="w-16 h-16 bg-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Compass className="w-8 h-8" />
               </div>
-              <h3 className="text-xl font-bold mb-2">Welcome to WanderGuide!</h3>
+              <h3 className="text-xl font-bold mb-2">Hey! Welcome to WanderGuide</h3>
               <p className="text-slate-400 text-sm">
-                Let&apos;s set up the best experience for exploring
+                I&apos;m your personal tour guide. Ask me anything about where you are!
               </p>
             </div>
             
-            <div className="space-y-4 mb-6">
-              <div className="bg-slate-700/50 rounded-xl p-4">
-                <div className="flex items-start gap-3">
-                  <div className="bg-emerald-600/20 p-2 rounded-lg">
-                    <MapPin className="w-5 h-5 text-emerald-400" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium mb-1">Share Your Location</h4>
-                    <p className="text-sm text-slate-400">
-                      Get personalized info about what&apos;s around you right now
-                    </p>
-                  </div>
+            <div className="bg-slate-700/50 rounded-xl p-4 mb-6">
+              <div className="flex items-start gap-3">
+                <div className="bg-emerald-600/20 p-2 rounded-lg">
+                  <MapPin className="w-5 h-5 text-emerald-400" />
                 </div>
-              </div>
-              
-              <div className="bg-slate-700/50 rounded-xl p-4">
-                <div className="flex items-start gap-3">
-                  <div className="bg-purple-600/20 p-2 rounded-lg">
-                    <Volume2 className="w-5 h-5 text-purple-400" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium mb-1">Enable Voice</h4>
-                    <p className="text-sm text-slate-400">
-                      Listen to your guide hands-free while you explore
-                    </p>
-                  </div>
+                <div>
+                  <h4 className="font-medium mb-1">Share your location?</h4>
+                  <p className="text-sm text-slate-400">
+                    So I can tell you about what&apos;s actually around you
+                  </p>
                 </div>
               </div>
             </div>
             
             <div className="space-y-2">
               <button
-                onClick={() => completeOnboarding(true, true)}
+                onClick={() => completeOnboarding(true)}
                 className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-medium transition"
               >
-                Enable Both & Start
+                Sure, let&apos;s go!
               </button>
               <button
-                onClick={() => completeOnboarding(true, false)}
-                className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-xl text-sm transition"
-              >
-                Just Location
-              </button>
-              <button
-                onClick={() => completeOnboarding(false, false)}
+                onClick={() => completeOnboarding(false)}
                 className="w-full px-4 py-2 text-slate-400 hover:text-white rounded-xl text-sm transition"
               >
-                Skip for now
+                Maybe later
               </button>
             </div>
           </div>

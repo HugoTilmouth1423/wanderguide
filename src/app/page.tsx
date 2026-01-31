@@ -5,16 +5,60 @@ import { createClient } from '@/lib/supabase/client'
 import { characters, Character } from '@/lib/characters'
 import { 
   MapPin, Camera, Send, Loader2, Menu, X, Crown, 
-  Compass, LogIn, LogOut, Sparkles, ChevronDown, Navigation
+  Compass, LogIn, LogOut, Sparkles, ChevronDown, Navigation,
+  Mic, Image as ImageIcon, Upload
 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
+
+// Speech Recognition types
+interface SpeechRecognitionResult {
+  readonly isFinal: boolean
+  [index: number]: { transcript: string }
+}
+
+interface SpeechRecognitionResultList {
+  readonly length: number
+  [index: number]: SpeechRecognitionResult
+}
+
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList
+}
+
+interface SpeechRecognitionInstance {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  start(): void
+  stop(): void
+  onresult: ((event: SpeechRecognitionEvent) => void) | null
+  onerror: ((event: Event) => void) | null
+  onend: (() => void) | null
+}
+
+interface SpeechRecognitionConstructor {
+  new (): SpeechRecognitionInstance
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition?: SpeechRecognitionConstructor
+    webkitSpeechRecognition?: SpeechRecognitionConstructor
+  }
+}
 
 interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
   image?: string
+  images?: string[]  // AI response images
   character?: { id: string; name: string; emoji: string }
+}
+
+interface ImageResult {
+  url: string
+  alt: string
 }
 
 interface LocationData {
@@ -59,11 +103,40 @@ function getMapsUrl(lat: number, lng: number, name: string) {
   return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
 }
 
-function MessageContent({ content }: { content: string }) {
-  const { text, maps } = parseMapLinks(content)
+// Parse image tokens from AI response: [[IMG:search term]]
+function parseImages(content: string): { text: string; imageSearches: string[] } {
+  const imgRegex = /\[\[IMG:([^\]]+)\]\]/g
+  const imageSearches: string[] = []
+  let match
+  
+  while ((match = imgRegex.exec(content)) !== null) {
+    imageSearches.push(match[1])
+  }
+  
+  const text = content.replace(imgRegex, '').trim()
+  return { text, imageSearches }
+}
+
+function MessageContent({ content, images }: { content: string; images?: string[] }) {
+  const { text: textWithoutImages } = parseImages(content)
+  const { text, maps } = parseMapLinks(textWithoutImages)
   
   return (
     <div>
+      {/* Display images if provided */}
+      {images && images.length > 0 && (
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          {images.slice(0, 2).map((img, idx) => (
+            <img 
+              key={idx} 
+              src={img} 
+              alt="Related" 
+              className="rounded-lg w-full h-32 object-cover"
+              loading="lazy"
+            />
+          ))}
+        </div>
+      )}
       <p className="whitespace-pre-wrap">{text}</p>
       {maps.length > 0 && (
         <div className="mt-3 pt-3 border-t border-slate-600 flex flex-wrap gap-2">
@@ -85,6 +158,134 @@ function MessageContent({ content }: { content: string }) {
   )
 }
 
+// Onboarding Modal Component
+function OnboardingModal({ 
+  onComplete, 
+  characters 
+}: { 
+  onComplete: (enableLocation: boolean, character?: Character) => void
+  characters: Character[]
+}) {
+  const [step, setStep] = useState<'welcome' | 'guide' | 'location'>('welcome')
+  const [selectedGuide, setSelectedGuide] = useState<Character>(characters[0])
+  
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl p-6 max-w-md w-full border border-slate-700 max-h-[90vh] overflow-y-auto">
+        
+        {step === 'welcome' && (
+          <>
+            <div className="text-center mb-6">
+              <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Compass className="w-10 h-10" />
+              </div>
+              <h2 className="text-2xl font-bold mb-2">Welcome to WanderGuide!</h2>
+              <p className="text-slate-400">
+                Your AI-powered tour guide. Explore any place with a personal guide who knows all the stories.
+              </p>
+            </div>
+            
+            <div className="space-y-3 mb-6">
+              <div className="flex items-center gap-3 bg-slate-700/30 rounded-xl p-3">
+                <div className="bg-emerald-600/20 p-2 rounded-lg">
+                  <MapPin className="w-5 h-5 text-emerald-400" />
+                </div>
+                <p className="text-sm text-slate-300">Ask about what&apos;s around you</p>
+              </div>
+              <div className="flex items-center gap-3 bg-slate-700/30 rounded-xl p-3">
+                <div className="bg-purple-600/20 p-2 rounded-lg">
+                  <Camera className="w-5 h-5 text-purple-400" />
+                </div>
+                <p className="text-sm text-slate-300">Snap a photo to learn about anything</p>
+              </div>
+              <div className="flex items-center gap-3 bg-slate-700/30 rounded-xl p-3">
+                <div className="bg-amber-600/20 p-2 rounded-lg">
+                  <Navigation className="w-5 h-5 text-amber-400" />
+                </div>
+                <p className="text-sm text-slate-300">Get directions to interesting places</p>
+              </div>
+            </div>
+            
+            <button
+              onClick={() => setStep('guide')}
+              className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-medium transition"
+            >
+              Get Started
+            </button>
+          </>
+        )}
+        
+        {step === 'guide' && (
+          <>
+            <div className="text-center mb-4">
+              <h2 className="text-xl font-bold mb-1">Pick your guide</h2>
+              <p className="text-slate-400 text-sm">
+                Each guide has their own style and personality
+              </p>
+            </div>
+            
+            <div className="space-y-2 mb-6 max-h-[40vh] overflow-y-auto">
+              {characters.map(char => (
+                <button
+                  key={char.id}
+                  onClick={() => setSelectedGuide(char)}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl transition text-left ${
+                    selectedGuide.id === char.id 
+                      ? 'bg-emerald-600 ring-2 ring-emerald-400' 
+                      : 'bg-slate-700/50 hover:bg-slate-700'
+                  }`}
+                >
+                  <span className="text-2xl">{char.emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium">{char.name}</p>
+                    <p className="text-sm text-slate-300 truncate">{char.description}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+            
+            <button
+              onClick={() => setStep('location')}
+              className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-medium transition"
+            >
+              Continue with {selectedGuide.name}
+            </button>
+          </>
+        )}
+        
+        {step === 'location' && (
+          <>
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-emerald-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <MapPin className="w-8 h-8 text-emerald-400" />
+              </div>
+              <h2 className="text-xl font-bold mb-2">One more thing...</h2>
+              <p className="text-slate-400">
+                Share your location so {selectedGuide.name} can tell you about what&apos;s around you
+              </p>
+            </div>
+            
+            <div className="space-y-2">
+              <button
+                onClick={() => onComplete(true, selectedGuide)}
+                className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-medium transition"
+              >
+                Enable Location
+              </button>
+              <button
+                onClick={() => onComplete(false, selectedGuide)}
+                className="w-full px-4 py-2 text-slate-400 hover:text-white rounded-xl text-sm transition"
+              >
+                Maybe later
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -101,9 +302,14 @@ export default function Home() {
   const [authLoading, setAuthLoading] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const [isListening, setIsListening] = useState(false)
+  const [hasSpeechRecognition, setHasSpeechRecognition] = useState(false)
+  const [showImageOptions, setShowImageOptions] = useState(false)
   
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const galleryInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const supabase = createClient()
   
   useEffect(() => {
@@ -131,11 +337,65 @@ export default function Home() {
     if (!hasSeenOnboarding) {
       setShowOnboarding(true)
     }
+    // Restore saved character preference
+    const savedCharacter = localStorage.getItem('wanderguide_character')
+    if (savedCharacter) {
+      const char = characters.find(c => c.id === savedCharacter)
+      if (char) setSelectedCharacter(char)
+    }
   }, [])
   
-  function completeOnboarding(enableLocation: boolean) {
+  // Initialize speech recognition
+  useEffect(() => {
+    const SpeechRecognitionAPI = typeof window !== 'undefined' 
+      ? (window.SpeechRecognition || window.webkitSpeechRecognition) 
+      : undefined
+    
+    if (SpeechRecognitionAPI) {
+      setHasSpeechRecognition(true)
+      recognitionRef.current = new SpeechRecognitionAPI()
+      recognitionRef.current.continuous = false
+      recognitionRef.current.interimResults = false
+      recognitionRef.current.lang = 'en-US'
+      
+      recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
+        const transcript = event.results[0][0].transcript
+        setInput(transcript)
+        setIsListening(false)
+      }
+      
+      recognitionRef.current.onerror = () => {
+        setIsListening(false)
+      }
+      
+      recognitionRef.current.onend = () => {
+        setIsListening(false)
+      }
+    }
+  }, [])
+  
+  function startListening() {
+    if (recognitionRef.current) {
+      setIsListening(true)
+      recognitionRef.current.start()
+    }
+  }
+  
+  function stopListening() {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop()
+      setIsListening(false)
+    }
+  }
+  
+  function completeOnboarding(enableLocation: boolean, selectedChar?: Character) {
     localStorage.setItem('wanderguide_onboarding', 'true')
     setShowOnboarding(false)
+    
+    if (selectedChar) {
+      setSelectedCharacter(selectedChar)
+      localStorage.setItem('wanderguide_character', selectedChar.id)
+    }
     
     if (enableLocation) {
       getLocation()
@@ -257,6 +517,7 @@ export default function Home() {
         id: Date.now().toString(),
         role: 'assistant',
         content: data.response,
+        images: data.images,
         character: data.character
       }])
       
@@ -529,7 +790,7 @@ export default function Home() {
                   />
                 )}
                 {msg.role === 'assistant' ? (
-                  <MessageContent content={msg.content} />
+                  <MessageContent content={msg.content} images={msg.images} />
                 ) : (
                   <p className="whitespace-pre-wrap">{msg.content}</p>
                 )}
@@ -588,7 +849,7 @@ export default function Home() {
                 className={`p-3 rounded-xl transition ${
                   location ? 'bg-emerald-600 text-white' : 'bg-slate-700 hover:bg-slate-600'
                 }`}
-                title="Get location"
+                title="Share location"
               >
                 {locationLoading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -597,15 +858,40 @@ export default function Home() {
                 )}
               </button>
               
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className={`p-3 rounded-xl transition ${
-                  imagePreview ? 'bg-emerald-600 text-white' : 'bg-slate-700 hover:bg-slate-600'
-                }`}
-                title="Take or upload photo"
-              >
-                <Camera className="w-5 h-5" />
-              </button>
+              {/* Image options button */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowImageOptions(!showImageOptions)}
+                  className={`p-3 rounded-xl transition ${
+                    imagePreview ? 'bg-emerald-600 text-white' : 'bg-slate-700 hover:bg-slate-600'
+                  }`}
+                  title="Add photo"
+                >
+                  <ImageIcon className="w-5 h-5" />
+                </button>
+                
+                {/* Image options dropdown */}
+                {showImageOptions && (
+                  <div className="absolute bottom-full left-0 mb-2 bg-slate-800 border border-slate-700 rounded-xl shadow-xl overflow-hidden min-w-[160px]">
+                    <button
+                      onClick={() => { fileInputRef.current?.click(); setShowImageOptions(false) }}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-700 transition text-left"
+                    >
+                      <Camera className="w-4 h-4 text-emerald-400" />
+                      <span className="text-sm">Take photo</span>
+                    </button>
+                    <button
+                      onClick={() => { galleryInputRef.current?.click(); setShowImageOptions(false) }}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-700 transition text-left"
+                    >
+                      <Upload className="w-4 h-4 text-purple-400" />
+                      <span className="text-sm">Upload from gallery</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              {/* Hidden file inputs */}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -614,7 +900,26 @@ export default function Home() {
                 onChange={handleImageSelect}
                 className="hidden"
               />
+              <input
+                ref={galleryInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+                className="hidden"
+              />
               
+              {/* Voice input button */}
+              {hasSpeechRecognition && (
+                <button
+                  onClick={isListening ? stopListening : startListening}
+                  className={`p-3 rounded-xl transition ${
+                    isListening ? 'bg-red-600 text-white animate-pulse' : 'bg-slate-700 hover:bg-slate-600'
+                  }`}
+                  title={isListening ? 'Stop listening' : 'Voice input'}
+                >
+                  <Mic className="w-5 h-5" />
+                </button>
+              )}
             </div>
             
             {/* Text input */}
@@ -624,7 +929,7 @@ export default function Home() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                placeholder="Ask me anything..."
+                placeholder={isListening ? "Listening..." : "Ask me anything..."}
                 className="w-full bg-slate-700 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
               <button
@@ -675,48 +980,10 @@ export default function Home() {
       
       {/* Onboarding Modal */}
       {showOnboarding && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl p-6 max-w-sm w-full border border-slate-700">
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Compass className="w-8 h-8" />
-              </div>
-              <h3 className="text-xl font-bold mb-2">Hey! Welcome to WanderGuide</h3>
-              <p className="text-slate-400 text-sm">
-                I&apos;m your personal tour guide. Ask me anything about where you are!
-              </p>
-            </div>
-            
-            <div className="bg-slate-700/50 rounded-xl p-4 mb-6">
-              <div className="flex items-start gap-3">
-                <div className="bg-emerald-600/20 p-2 rounded-lg">
-                  <MapPin className="w-5 h-5 text-emerald-400" />
-                </div>
-                <div>
-                  <h4 className="font-medium mb-1">Share your location?</h4>
-                  <p className="text-sm text-slate-400">
-                    So I can tell you about what&apos;s actually around you
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <button
-                onClick={() => completeOnboarding(true)}
-                className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-medium transition"
-              >
-                Sure, let&apos;s go!
-              </button>
-              <button
-                onClick={() => completeOnboarding(false)}
-                className="w-full px-4 py-2 text-slate-400 hover:text-white rounded-xl text-sm transition"
-              >
-                Maybe later
-              </button>
-            </div>
-          </div>
-        </div>
+        <OnboardingModal 
+          onComplete={completeOnboarding}
+          characters={characters}
+        />
       )}
     </main>
   )

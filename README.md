@@ -1,36 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# WanderGuide 🧭
 
-## Getting Started
+An AI-powered tour guide app that uses GPT-4o for location-aware and photo-based exploration.
 
-First, run the development server:
+## Features
+
+- **5 Unique Guide Characters**: Choose your tour guide personality
+  - 🎓 Professor Adelaide - The scholarly historian
+  - 🏠 Jamie - Your friendly local
+  - 📖 Marcus the Bard - Dramatic storyteller
+  - 😂 Frankie - The comedian guide
+  - 🧭 Captain Nova - Family-friendly explorer
+
+- **Location-Aware**: Uses GPS to provide contextual information about your surroundings
+- **Photo Recognition**: Take a photo of any landmark, building, or artwork to learn about it
+- **Freemium Model**: 5 free queries per day
+- **Day Pass**: £2.99 for 24 hours of unlimited access
+
+## Tech Stack
+
+- **Frontend**: Next.js 14, React, Tailwind CSS
+- **Backend**: Next.js API Routes
+- **Database & Auth**: Supabase
+- **AI**: OpenAI GPT-4o
+- **Payments**: Stripe
+- **Hosting**: Vercel
+
+## Setup
+
+### 1. Create a Supabase Project
+
+1. Go to [supabase.com](https://supabase.com) and create a new project
+2. Run the SQL from `supabase-schema.sql` in the SQL editor
+3. Copy your project URL and keys
+
+### 2. Create a Stripe Account
+
+1. Go to [stripe.com](https://stripe.com) and create an account
+2. Get your API keys from the dashboard
+3. Set up a webhook endpoint pointing to `/api/webhook`
+4. Select the `checkout.session.completed` event
+
+### 3. Get an OpenAI API Key
+
+1. Go to [platform.openai.com](https://platform.openai.com)
+2. Create an API key with access to GPT-4o
+
+### 4. Configure Environment Variables
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.local.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Fill in all the values in `.env.local`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 5. Run Locally
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm install
+npm run dev
+```
 
-## Learn More
+### 6. Deploy to Vercel
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npx vercel
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Add all environment variables in Vercel dashboard.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Cost Estimates
 
-## Deploy on Vercel
+- GPT-4o per query (text): ~£0.01
+- GPT-4o per query (with image): ~£0.02-0.03
+- Day Pass price: £2.99
+- Estimated margin per day pass: ~100 queries worth
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT

@@ -571,7 +571,7 @@ export default function Home() {
     setShowMenu(false)
   }
   
-  async function buyDayPass() {
+  async function buyPass(passType: 'day_pass' | 'weekend_pass' | 'week_pass') {
     if (!user) {
       setShowAuthModal(true)
       return
@@ -580,7 +580,7 @@ export default function Home() {
     const res = await fetch('/api/checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ priceType: 'day_pass' })
+      body: JSON.stringify({ priceType: passType })
     })
     
     const { url } = await res.json()
@@ -615,26 +615,52 @@ export default function Home() {
         
         {/* Dropdown menu */}
         {showMenu && (
-          <div className="absolute right-4 top-full mt-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-2 min-w-[200px]">
+          <div className="absolute right-4 top-full mt-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-2 min-w-[220px]">
             {user ? (
               <>
                 <p className="px-3 py-2 text-sm text-slate-400 border-b border-slate-700 mb-2">
                   {user.email}
                 </p>
+                <p className="px-3 py-1 text-xs text-slate-500 uppercase">Unlimited Access</p>
                 <button
-                  onClick={buyDayPass}
-                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-700 rounded-lg transition text-left"
+                  onClick={() => buyPass('day_pass')}
+                  className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-700 rounded-lg transition text-left"
                 >
-                  <Crown className="w-4 h-4 text-yellow-400" />
-                  <span>Buy Day Pass - £2.99</span>
+                  <span className="flex items-center gap-2">
+                    <Crown className="w-4 h-4 text-yellow-400" />
+                    <span>1 Day</span>
+                  </span>
+                  <span className="text-emerald-400 font-medium">£2.99</span>
                 </button>
                 <button
-                  onClick={handleSignOut}
-                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-700 rounded-lg transition text-left text-red-400"
+                  onClick={() => buyPass('weekend_pass')}
+                  className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-700 rounded-lg transition text-left"
                 >
-                  <LogOut className="w-4 h-4" />
-                  <span>Sign Out</span>
+                  <span className="flex items-center gap-2">
+                    <Crown className="w-4 h-4 text-yellow-400" />
+                    <span>3 Days</span>
+                  </span>
+                  <span className="text-emerald-400 font-medium">£4.99</span>
                 </button>
+                <button
+                  onClick={() => buyPass('week_pass')}
+                  className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-700 rounded-lg transition text-left"
+                >
+                  <span className="flex items-center gap-2">
+                    <Crown className="w-4 h-4 text-yellow-400" />
+                    <span>7 Days</span>
+                  </span>
+                  <span className="text-emerald-400 font-medium">£7.99</span>
+                </button>
+                <div className="border-t border-slate-700 mt-2 pt-2">
+                  <button
+                    onClick={handleSignOut}
+                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-700 rounded-lg transition text-left text-red-400"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
               </>
             ) : (
               <button
@@ -744,27 +770,43 @@ export default function Home() {
             </div>
           )}
           
-          {/* Contextual suggestions after messages */}
-          {messages.length > 0 && messages.length < 6 && !isLoading && (
-            <div className="flex flex-wrap justify-center gap-2 mt-4">
-              <button
-                onClick={() => setInput("Oh interesting - tell me more about that")}
-                className="px-3 py-1.5 bg-slate-700/50 hover:bg-slate-600 rounded-full text-xs transition"
-              >
-                Tell me more
-              </button>
-              <button
-                onClick={() => setInput("Nice! What else is worth checking out nearby?")}
-                className="px-3 py-1.5 bg-slate-700/50 hover:bg-slate-600 rounded-full text-xs transition"
-              >
-                What else?
-              </button>
-              <button
-                onClick={() => setInput("OK but what about somewhere the locals go?")}
-                className="px-3 py-1.5 bg-slate-700/50 hover:bg-slate-600 rounded-full text-xs transition"
-              >
-                Local spots
-              </button>
+          {/* "Where next?" button - always visible after first message */}
+          {messages.length > 0 && !isLoading && (
+            <div className="mt-4 space-y-3">
+              {/* Primary "where next" button */}
+              <div className="flex justify-center">
+                <button
+                  onClick={() => setInput("Where should I go next? Give me 2-3 interesting places within walking distance that I could explore right now.")}
+                  className="px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 rounded-xl text-sm font-medium transition flex items-center gap-2 shadow-lg"
+                >
+                  <Navigation className="w-4 h-4" />
+                  Where should I go next?
+                </button>
+              </div>
+              
+              {/* Secondary suggestions */}
+              {messages.length < 8 && (
+                <div className="flex flex-wrap justify-center gap-2">
+                  <button
+                    onClick={() => setInput("Oh interesting - tell me more about that")}
+                    className="px-3 py-1.5 bg-slate-700/50 hover:bg-slate-600 rounded-full text-xs transition"
+                  >
+                    Tell me more
+                  </button>
+                  <button
+                    onClick={() => setInput("Any good cafes or restaurants within a 5 minute walk?")}
+                    className="px-3 py-1.5 bg-slate-700/50 hover:bg-slate-600 rounded-full text-xs transition"
+                  >
+                    🍽️ Food nearby
+                  </button>
+                  <button
+                    onClick={() => setInput("What about somewhere the locals go that tourists miss?")}
+                    className="px-3 py-1.5 bg-slate-700/50 hover:bg-slate-600 rounded-full text-xs transition"
+                  >
+                    🤫 Local spots
+                  </button>
+                </div>
+              )}
             </div>
           )}
           

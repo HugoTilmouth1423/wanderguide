@@ -1,11 +1,50 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+
+// Web Speech API types
+interface SpeechRecognitionResult {
+  readonly length: number
+  readonly isFinal: boolean
+  [index: number]: { transcript: string; confidence: number }
+}
+
+interface SpeechRecognitionResultList {
+  readonly length: number
+  [index: number]: SpeechRecognitionResult
+}
+
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList
+}
+
+interface SpeechRecognitionInstance {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  start(): void
+  stop(): void
+  onresult: ((event: SpeechRecognitionEvent) => void) | null
+  onerror: ((event: Event) => void) | null
+  onend: (() => void) | null
+}
+
+interface SpeechRecognitionConstructor {
+  new (): SpeechRecognitionInstance
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition?: SpeechRecognitionConstructor
+    webkitSpeechRecognition?: SpeechRecognitionConstructor
+  }
+}
 import { createClient } from '@/lib/supabase/client'
 import { characters, Character } from '@/lib/characters'
 import { 
   MapPin, Camera, Send, Loader2, Menu, X, Crown, 
-  Compass, LogIn, LogOut, Sparkles, ChevronDown, Navigation 
+  Compass, LogIn, LogOut, Sparkles, ChevronDown, Navigation,
+  Mic, MicOff, Volume2, VolumeX
 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 
@@ -100,8 +139,14 @@ export default function Home() {
   const [authEmail, setAuthEmail] = useState('')
   const [authLoading, setAuthLoading] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [voiceEnabled, setVoiceEnabled] = useState(false)
+  const [isListening, setIsListening] = useState(false)
+  const [isSpeaking, setIsSpeaking] = useState(false)
+  const [hasSpeechRecognition, setHasSpeechRecognition] = useState(false)
   
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
   
@@ -123,6 +168,102 @@ export default function Home() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+  
+  // Check if first visit - show onboarding
+  useEffect(() => {
+    const hasSeenOnboarding = localStorage.getItem('wanderguide_onboarding')
+    if (!hasSeenOnboarding) {
+      setShowOnboarding(true)
+    }
+    // Restore voice preference
+    const savedVoice = localStorage.getItem('wanderguide_voice')
+    if (savedVoice === 'true') {
+      setVoiceEnabled(true)
+    }
+  }, [])
+  
+  // Initialize speech recognition
+  useEffect(() => {
+    const SpeechRecognitionAPI = typeof window !== 'undefined' 
+      ? (window.SpeechRecognition || window.webkitSpeechRecognition) 
+      : undefined
+    
+    if (SpeechRecognitionAPI) {
+      setHasSpeechRecognition(true)
+      recognitionRef.current = new SpeechRecognitionAPI()
+      recognitionRef.current.continuous = false
+      recognitionRef.current.interimResults = false
+      recognitionRef.current.lang = 'en-US'
+      
+      recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
+        const transcript = event.results[0][0].transcript
+        setInput(transcript)
+        setIsListening(false)
+      }
+      
+      recognitionRef.current.onerror = () => {
+        setIsListening(false)
+      }
+      
+      recognitionRef.current.onend = () => {
+        setIsListening(false)
+      }
+    }
+  }, [])
+  
+  function toggleVoice() {
+    const newValue = !voiceEnabled
+    setVoiceEnabled(newValue)
+    localStorage.setItem('wanderguide_voice', String(newValue))
+    if (!newValue) {
+      window.speechSynthesis?.cancel()
+      setIsSpeaking(false)
+    }
+  }
+  
+  function startListening() {
+    if (recognitionRef.current) {
+      setIsListening(true)
+      recognitionRef.current.start()
+    }
+  }
+  
+  function stopListening() {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop()
+      setIsListening(false)
+    }
+  }
+  
+  function speakText(text: string) {
+    if (!voiceEnabled || !window.speechSynthesis) return
+    
+    // Remove map tokens before speaking
+    const cleanText = text.replace(/\[\[MAP:[^\]]+\]\]/g, '')
+    
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(cleanText)
+    utterance.rate = 1.0
+    utterance.pitch = 1.0
+    utterance.onstart = () => setIsSpeaking(true)
+    utterance.onend = () => setIsSpeaking(false)
+    utterance.onerror = () => setIsSpeaking(false)
+    window.speechSynthesis.speak(utterance)
+  }
+  
+  function completeOnboarding(enableLocation: boolean, enableVoice: boolean) {
+    localStorage.setItem('wanderguide_onboarding', 'true')
+    setShowOnboarding(false)
+    
+    if (enableVoice) {
+      setVoiceEnabled(true)
+      localStorage.setItem('wanderguide_voice', 'true')
+    }
+    
+    if (enableLocation) {
+      getLocation()
+    }
+  }
   
   async function fetchProfile(userId: string) {
     const { data } = await supabase
@@ -235,12 +376,18 @@ export default function Home() {
         throw new Error(data.error)
       }
       
-      setMessages(prev => [...prev, {
+      const assistantMessage = {
         id: Date.now().toString(),
-        role: 'assistant',
+        role: 'assistant' as const,
         content: data.response,
         character: data.character
-      }])
+      }
+      setMessages(prev => [...prev, assistantMessage])
+      
+      // Speak the response if voice is enabled
+      if (voiceEnabled) {
+        speakText(data.response)
+      }
       
       // Update remaining queries
       if (queriesRemaining !== null) {
@@ -413,26 +560,75 @@ export default function Home() {
                 Your AI-powered tour guide. Ask about any place, share a photo,<br />
                 or enable location to explore what&apos;s around you.
               </p>
-              <div className="flex flex-wrap justify-center gap-2">
-                <button
-                  onClick={() => setInput("What interesting things are near me?")}
-                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-full text-sm transition"
-                >
-                  🗺️ What&apos;s near me?
-                </button>
-                <button
-                  onClick={() => setInput("Tell me about the history of this area")}
-                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-full text-sm transition"
-                >
-                  📜 Local history
-                </button>
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-full text-sm transition"
-                >
-                  📸 Identify something
-                </button>
+              
+              {/* Suggested Questions */}
+              <div className="space-y-3">
+                <p className="text-xs text-slate-500 uppercase tracking-wide">Try asking</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <button
+                    onClick={() => setInput("What interesting things are near me?")}
+                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-full text-sm transition"
+                  >
+                    🗺️ What&apos;s near me?
+                  </button>
+                  <button
+                    onClick={() => setInput("Tell me about the history of this area")}
+                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-full text-sm transition"
+                  >
+                    📜 Local history
+                  </button>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-full text-sm transition"
+                  >
+                    📸 Identify something
+                  </button>
+                </div>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <button
+                    onClick={() => setInput("Where's a good place for lunch nearby?")}
+                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-full text-sm transition"
+                  >
+                    🍽️ Food nearby
+                  </button>
+                  <button
+                    onClick={() => setInput("What are the top 3 things I should see here?")}
+                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-full text-sm transition"
+                  >
+                    ⭐ Top 3 sights
+                  </button>
+                  <button
+                    onClick={() => setInput("Tell me something surprising about this place")}
+                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-full text-sm transition"
+                  >
+                    🎭 Hidden stories
+                  </button>
+                </div>
               </div>
+            </div>
+          )}
+          
+          {/* Contextual suggestions after messages */}
+          {messages.length > 0 && messages.length < 6 && !isLoading && (
+            <div className="flex flex-wrap justify-center gap-2 mt-4">
+              <button
+                onClick={() => setInput("Tell me more about that")}
+                className="px-3 py-1.5 bg-slate-700/50 hover:bg-slate-600 rounded-full text-xs transition"
+              >
+                Tell me more
+              </button>
+              <button
+                onClick={() => setInput("What else is nearby?")}
+                className="px-3 py-1.5 bg-slate-700/50 hover:bg-slate-600 rounded-full text-xs transition"
+              >
+                What else is nearby?
+              </button>
+              <button
+                onClick={() => setInput("Any hidden gems around here?")}
+                className="px-3 py-1.5 bg-slate-700/50 hover:bg-slate-600 rounded-full text-xs transition"
+              >
+                Hidden gems
+              </button>
             </div>
           )}
           
@@ -547,7 +743,35 @@ export default function Home() {
                 onChange={handleImageSelect}
                 className="hidden"
               />
+              
+              {/* Voice toggle */}
+              <button
+                onClick={toggleVoice}
+                className={`p-3 rounded-xl transition ${
+                  voiceEnabled ? 'bg-purple-600 text-white' : 'bg-slate-700 hover:bg-slate-600'
+                }`}
+                title={voiceEnabled ? 'Disable voice responses' : 'Enable voice responses'}
+              >
+                {voiceEnabled ? (
+                  isSpeaking ? <Volume2 className="w-5 h-5 animate-pulse" /> : <Volume2 className="w-5 h-5" />
+                ) : (
+                  <VolumeX className="w-5 h-5" />
+                )}
+              </button>
             </div>
+            
+            {/* Voice input button */}
+            {hasSpeechRecognition && (
+              <button
+                onClick={isListening ? stopListening : startListening}
+                className={`p-3 rounded-xl transition ${
+                  isListening ? 'bg-red-600 text-white animate-pulse' : 'bg-slate-700 hover:bg-slate-600'
+                }`}
+                title={isListening ? 'Stop listening' : 'Voice input'}
+              >
+                {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+              </button>
+            )}
             
             {/* Text input */}
             <div className="flex-1 relative">
@@ -556,7 +780,7 @@ export default function Home() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                placeholder="Ask about this place..."
+                placeholder={isListening ? "Listening..." : "Ask about this place..."}
                 className="w-full bg-slate-700 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
               <button
@@ -599,6 +823,74 @@ export default function Home() {
                 className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg transition disabled:opacity-50"
               >
                 {authLoading ? 'Sending...' : 'Send Link'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Onboarding Modal */}
+      {showOnboarding && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl p-6 max-w-sm w-full border border-slate-700">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Compass className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-bold mb-2">Welcome to WanderGuide!</h3>
+              <p className="text-slate-400 text-sm">
+                Let&apos;s set up the best experience for exploring
+              </p>
+            </div>
+            
+            <div className="space-y-4 mb-6">
+              <div className="bg-slate-700/50 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <div className="bg-emerald-600/20 p-2 rounded-lg">
+                    <MapPin className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium mb-1">Share Your Location</h4>
+                    <p className="text-sm text-slate-400">
+                      Get personalized info about what&apos;s around you right now
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-slate-700/50 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <div className="bg-purple-600/20 p-2 rounded-lg">
+                    <Volume2 className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium mb-1">Enable Voice</h4>
+                    <p className="text-sm text-slate-400">
+                      Listen to your guide hands-free while you explore
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <button
+                onClick={() => completeOnboarding(true, true)}
+                className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-medium transition"
+              >
+                Enable Both & Start
+              </button>
+              <button
+                onClick={() => completeOnboarding(true, false)}
+                className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-xl text-sm transition"
+              >
+                Just Location
+              </button>
+              <button
+                onClick={() => completeOnboarding(false, false)}
+                className="w-full px-4 py-2 text-slate-400 hover:text-white rounded-xl text-sm transition"
+              >
+                Skip for now
               </button>
             </div>
           </div>

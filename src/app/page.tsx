@@ -373,16 +373,22 @@ export default function Home() {
   }, [])
   
   function startListening() {
-    if (recognitionRef.current) {
-      setIsListening(true)
-      recognitionRef.current.start()
+    if (recognitionRef.current && !isListening) {
+      try {
+        setIsListening(true)
+        recognitionRef.current.start()
+      } catch (e) {
+        console.error('Speech recognition error:', e)
+        setIsListening(false)
+      }
     }
   }
   
   function stopListening() {
-    if (recognitionRef.current) {
+    if (recognitionRef.current && isListening) {
+      // Don't set isListening to false here - let onend/onresult handle it
+      // This allows the recognition to finish processing before stopping
       recognitionRef.current.stop()
-      setIsListening(false)
     }
   }
   
@@ -909,12 +915,13 @@ export default function Home() {
               {/* Voice input button - hold to record */}
               {hasSpeechRecognition && (
                 <button
-                  onMouseDown={startListening}
-                  onMouseUp={stopListening}
-                  onMouseLeave={isListening ? stopListening : undefined}
-                  onTouchStart={startListening}
-                  onTouchEnd={stopListening}
-                  className={`p-3 rounded-xl transition select-none ${
+                  onMouseDown={(e) => { e.preventDefault(); startListening(); }}
+                  onMouseUp={(e) => { e.preventDefault(); stopListening(); }}
+                  onMouseLeave={() => { if (isListening) stopListening(); }}
+                  onTouchStart={(e) => { e.preventDefault(); startListening(); }}
+                  onTouchEnd={(e) => { e.preventDefault(); stopListening(); }}
+                  onContextMenu={(e) => e.preventDefault()}
+                  className={`p-3 rounded-xl transition select-none touch-none ${
                     isListening ? 'bg-red-600 text-white scale-110' : 'bg-slate-700 hover:bg-slate-600'
                   }`}
                   title="Hold to speak"

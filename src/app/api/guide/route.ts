@@ -80,12 +80,6 @@ Example: [[MAP:Tower of London:51.5081:-0.0759]]
 
 The app will render these as tappable "Navigate" buttons. Include 1-3 map links when recommending specific places.
 
-IMAGE FEATURE:
-To include relevant images in your response, use this format: [[IMG:search term]]
-Example: [[IMG:Tower of London]] or [[IMG:Big Ben sunset]]
-
-Include 1-2 image tokens when describing notable places or landmarks. This helps make your responses more visual and engaging.
-
 Respond naturally and helpfully. Keep responses concise but informative (2-4 paragraphs typically). If you can identify a specific location from the image or coordinates, do so with confidence.`
       }
     ]
@@ -131,39 +125,28 @@ Respond naturally and helpfully. Keep responses concise but informative (2-4 par
       imageSearches.push(imgMatch[1])
     }
     
-    // Fetch images from Unsplash or fallback to Pexels-style URLs
+    // Fetch images from Unsplash (requires API key)
     let images: string[] = []
-    if (imageSearches.length > 0) {
+    if (imageSearches.length > 0 && process.env.UNSPLASH_ACCESS_KEY) {
       const searchTerm = imageSearches[0]
-      
-      if (process.env.UNSPLASH_ACCESS_KEY) {
-        try {
-          const unsplashRes = await fetch(
-            `https://api.unsplash.com/search/photos?query=${encodeURIComponent(searchTerm)}&per_page=2&orientation=landscape`,
-            {
-              headers: {
-                'Authorization': `Client-ID ${process.env.UNSPLASH_ACCESS_KEY}`
-              }
+      try {
+        const unsplashRes = await fetch(
+          `https://api.unsplash.com/search/photos?query=${encodeURIComponent(searchTerm)}&per_page=2&orientation=landscape`,
+          {
+            headers: {
+              'Authorization': `Client-ID ${process.env.UNSPLASH_ACCESS_KEY}`
             }
-          )
-          if (unsplashRes.ok) {
-            const unsplashData = await unsplashRes.json()
-            images = unsplashData.results?.map((r: { urls: { small: string } }) => r.urls.small) || []
           }
-        } catch (e) {
-          console.error('Unsplash fetch error:', e)
+        )
+        if (unsplashRes.ok) {
+          const unsplashData = await unsplashRes.json()
+          images = unsplashData.results?.map((r: { urls: { small: string } }) => r.urls.small) || []
         }
-      }
-      
-      // Fallback: use Unsplash Source (no API key needed, but less reliable)
-      if (images.length === 0) {
-        // Use Unsplash source URLs which work without API key
-        images = [
-          `https://source.unsplash.com/800x400/?${encodeURIComponent(searchTerm)}`,
-          `https://source.unsplash.com/800x400/?${encodeURIComponent(searchTerm)},travel`
-        ]
+      } catch (e) {
+        console.error('Unsplash fetch error:', e)
       }
     }
+    // Note: Images disabled until UNSPLASH_ACCESS_KEY is configured
     
     return NextResponse.json({
       response: responseText,

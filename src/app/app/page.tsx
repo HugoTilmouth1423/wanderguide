@@ -595,7 +595,7 @@ export default function Home() {
       }
       
       if (data.error) {
-        throw new Error(data.error)
+        throw new Error(data.detail || data.message || data.error)
       }
       
       setMessages(prev => [...prev, {
@@ -613,10 +613,11 @@ export default function Home() {
       
     } catch (error) {
       console.error('Error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
+        content: `Sorry, I encountered an error: ${errorMessage}`,
         character: { id: 'system', name: 'System', emoji: '❌' }
       }])
     } finally {

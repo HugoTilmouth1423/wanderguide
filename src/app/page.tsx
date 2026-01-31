@@ -343,6 +343,10 @@ export default function Home() {
     }
   }, [])
   
+  // Track if voice recording started (for WhatsApp-style hold behavior)
+  const voiceRecordingStarted = useRef(false)
+  const pendingTranscript = useRef<string>('')
+  
   // Initialize speech recognition
   useEffect(() => {
     const SpeechRecognitionAPI = typeof window !== 'undefined' 
@@ -352,42 +356,90 @@ export default function Home() {
     if (SpeechRecognitionAPI) {
       setHasSpeechRecognition(true)
       recognitionRef.current = new SpeechRecognitionAPI()
-      recognitionRef.current.continuous = false
-      recognitionRef.current.interimResults = false
+      recognitionRef.current.continuous = true  // Keep listening
+      recognitionRef.current.interimResults = true  // Get results as we speak
       recognitionRef.current.lang = 'en-US'
       
       recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
-        const transcript = event.results[0][0].transcript
-        setInput(transcript)
-        setIsListening(false)
+        let finalTranscript = ''
+        let interimTranscript = ''
+        
+        for (let i = 0; i < event.results.length; i++) {
+          const result = event.results[i]
+          if (result.isFinal) {
+            finalTranscript += result[0].transcript
+          } else {
+            interimTranscript += result[0].transcript
+          }
+        }
+        
+        // Store the transcript
+        pendingTranscript.current = finalTranscript || interimTranscript
+        // Show in input as we speak
+        setInput(pendingTranscript.current)
       }
       
-      recognitionRef.current.onerror = () => {
+      recognitionRef.current.onerror = (e) => {
+        console.error('Speech recognition error:', e)
         setIsListening(false)
+        voiceRecordingStarted.current = false
       }
       
       recognitionRef.current.onend = () => {
         setIsListening(false)
+        // If we have a transcript when recording ends, send it
+        if (pendingTranscript.current.trim() && voiceRecordingStarted.current) {
+          // Auto-send after a small delay to ensure UI updates
+          setTimeout(() => {
+            if (pendingTranscript.current.trim()) {
+              setInput(pendingTranscript.current)
+              // Trigger send
+              const sendBtn = document.querySelector('[data-send-button]') as HTMLButtonElement
+              if (sendBtn) sendBtn.click()
+            }
+            pendingTranscript.current = ''
+          }, 100)
+        }
+        voiceRecordingStarted.current = false
       }
     }
   }, [])
   
+  // Global mouse/touch up handler for WhatsApp-style behavior
+  useEffect(() => {
+    const handleGlobalUp = () => {
+      if (voiceRecordingStarted.current && isListening) {
+        stopListening()
+      }
+    }
+    
+    document.addEventListener('mouseup', handleGlobalUp)
+    document.addEventListener('touchend', handleGlobalUp)
+    
+    return () => {
+      document.removeEventListener('mouseup', handleGlobalUp)
+      document.removeEventListener('touchend', handleGlobalUp)
+    }
+  }, [isListening])
+  
   function startListening() {
     if (recognitionRef.current && !isListening) {
       try {
+        pendingTranscript.current = ''
+        setInput('')
+        voiceRecordingStarted.current = true
         setIsListening(true)
         recognitionRef.current.start()
       } catch (e) {
         console.error('Speech recognition error:', e)
         setIsListening(false)
+        voiceRecordingStarted.current = false
       }
     }
   }
   
   function stopListening() {
     if (recognitionRef.current && isListening) {
-      // Don't set isListening to false here - let onend/onresult handle it
-      // This allows the recognition to finish processing before stopping
       recognitionRef.current.stop()
     }
   }
@@ -954,17 +1006,16 @@ export default function Home() {
                 className="hidden"
               />
               
-              {/* Voice input button - hold to record */}
+              {/* Voice input button - hold to record (WhatsApp style) */}
               {hasSpeechRecognition && (
                 <button
                   onMouseDown={(e) => { e.preventDefault(); startListening(); }}
-                  onMouseUp={(e) => { e.preventDefault(); stopListening(); }}
-                  onMouseLeave={() => { if (isListening) stopListening(); }}
                   onTouchStart={(e) => { e.preventDefault(); startListening(); }}
-                  onTouchEnd={(e) => { e.preventDefault(); stopListening(); }}
                   onContextMenu={(e) => e.preventDefault()}
                   className={`p-3 rounded-xl transition select-none touch-none ${
-                    isListening ? 'bg-red-600 text-white scale-110' : 'bg-slate-700 hover:bg-slate-600'
+                    isListening 
+                      ? 'bg-red-600 text-white scale-125 shadow-lg shadow-red-600/50' 
+                      : 'bg-slate-700 hover:bg-slate-600'
                   }`}
                   title="Hold to speak"
                 >
@@ -984,6 +1035,7 @@ export default function Home() {
                 className="w-full bg-slate-700 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
               <button
+                data-send-button
                 onClick={sendMessage}
                 disabled={isLoading || (!input.trim() && !imagePreview)}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:hover:bg-emerald-600 rounded-lg transition"

@@ -166,89 +166,77 @@ function OnboardingModal({
   onComplete: (enableLocation: boolean, character?: Character) => void
   characters: Character[]
 }) {
-  const [step, setStep] = useState<'welcome' | 'guide' | 'location'>('welcome')
+  const [step, setStep] = useState<'guide' | 'location'>('guide')
   const [selectedGuide, setSelectedGuide] = useState<Character>(characters[0])
   
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl p-6 max-w-md w-full border border-slate-700 max-h-[90vh] overflow-y-auto">
         
-        {step === 'welcome' && (
-          <>
-            <div className="text-center mb-6">
-              <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Compass className="w-10 h-10" />
-              </div>
-              <h2 className="text-2xl font-bold mb-2">Welcome to WanderGuide!</h2>
-              <p className="text-slate-400">
-                Your AI-powered tour guide. Explore any place with a personal guide who knows all the stories.
-              </p>
-            </div>
-            
-            <div className="space-y-3 mb-6">
-              <div className="flex items-center gap-3 bg-slate-700/30 rounded-xl p-3">
-                <div className="bg-emerald-600/20 p-2 rounded-lg">
-                  <MapPin className="w-5 h-5 text-emerald-400" />
-                </div>
-                <p className="text-sm text-slate-300">Ask about what&apos;s around you</p>
-              </div>
-              <div className="flex items-center gap-3 bg-slate-700/30 rounded-xl p-3">
-                <div className="bg-purple-600/20 p-2 rounded-lg">
-                  <Camera className="w-5 h-5 text-purple-400" />
-                </div>
-                <p className="text-sm text-slate-300">Snap a photo to learn about anything</p>
-              </div>
-              <div className="flex items-center gap-3 bg-slate-700/30 rounded-xl p-3">
-                <div className="bg-amber-600/20 p-2 rounded-lg">
-                  <Navigation className="w-5 h-5 text-amber-400" />
-                </div>
-                <p className="text-sm text-slate-300">Get directions to interesting places</p>
-              </div>
-            </div>
-            
-            <button
-              onClick={() => setStep('guide')}
-              className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-medium transition"
-            >
-              Get Started
-            </button>
-          </>
-        )}
-        
         {step === 'guide' && (
           <>
-            <div className="text-center mb-4">
-              <h2 className="text-xl font-bold mb-1">Pick your guide</h2>
+            {/* Header */}
+            <div className="text-center mb-5">
+              <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Compass className="w-8 h-8" />
+              </div>
+              <h2 className="text-2xl font-bold mb-1">Welcome to WanderGuide!</h2>
               <p className="text-slate-400 text-sm">
-                Each guide has their own style and personality
+                Your personal AI tour guide
               </p>
             </div>
             
-            <div className="space-y-2 mb-6 max-h-[40vh] overflow-y-auto">
-              {characters.map(char => (
-                <button
-                  key={char.id}
-                  onClick={() => setSelectedGuide(char)}
-                  className={`w-full flex items-center gap-3 p-3 rounded-xl transition text-left ${
-                    selectedGuide.id === char.id 
-                      ? 'bg-emerald-600 ring-2 ring-emerald-400' 
-                      : 'bg-slate-700/50 hover:bg-slate-700'
-                  }`}
-                >
-                  <span className="text-2xl">{char.emoji}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium">{char.name}</p>
-                    <p className="text-sm text-slate-300 truncate">{char.description}</p>
-                  </div>
-                </button>
-              ))}
+            {/* Features */}
+            <div className="grid grid-cols-3 gap-2 mb-5">
+              <div className="text-center p-3 bg-slate-700/30 rounded-xl">
+                <div className="bg-emerald-600/20 w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-2">
+                  <MapPin className="w-5 h-5 text-emerald-400" />
+                </div>
+                <p className="text-xs text-slate-300">Location-aware info</p>
+              </div>
+              <div className="text-center p-3 bg-slate-700/30 rounded-xl">
+                <div className="bg-purple-600/20 w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-2">
+                  <Camera className="w-5 h-5 text-purple-400" />
+                </div>
+                <p className="text-xs text-slate-300">Photo recognition</p>
+              </div>
+              <div className="text-center p-3 bg-slate-700/30 rounded-xl">
+                <div className="bg-amber-600/20 w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-2">
+                  <Mic className="w-5 h-5 text-amber-400" />
+                </div>
+                <p className="text-xs text-slate-300">Voice input</p>
+              </div>
+            </div>
+            
+            {/* Guide Selection */}
+            <div className="mb-5">
+              <p className="text-sm font-medium mb-3 text-center">Choose your guide</p>
+              <div className="space-y-2 max-h-[35vh] overflow-y-auto">
+                {characters.map(char => (
+                  <button
+                    key={char.id}
+                    onClick={() => setSelectedGuide(char)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl transition text-left ${
+                      selectedGuide.id === char.id 
+                        ? 'bg-emerald-600 ring-2 ring-emerald-400' 
+                        : 'bg-slate-700/50 hover:bg-slate-700'
+                    }`}
+                  >
+                    <span className="text-2xl">{char.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium">{char.name}</p>
+                      <p className="text-xs text-slate-300 truncate">{char.description}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
             
             <button
               onClick={() => setStep('location')}
               className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-medium transition"
             >
-              Continue with {selectedGuide.name}
+              Continue with {selectedGuide.name} {selectedGuide.emoji}
             </button>
           </>
         )}
@@ -256,13 +244,23 @@ function OnboardingModal({
         {step === 'location' && (
           <>
             <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-emerald-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <MapPin className="w-8 h-8 text-emerald-400" />
-              </div>
-              <h2 className="text-xl font-bold mb-2">One more thing...</h2>
-              <p className="text-slate-400">
-                Share your location so {selectedGuide.name} can tell you about what&apos;s around you
+              <div className="text-5xl mb-4">{selectedGuide.emoji}</div>
+              <h2 className="text-xl font-bold mb-2">Hi! I&apos;m {selectedGuide.name}</h2>
+              <p className="text-slate-400 text-sm">
+                {selectedGuide.description}
               </p>
+            </div>
+            
+            <div className="bg-slate-700/30 rounded-xl p-4 mb-6">
+              <div className="flex items-center gap-3">
+                <div className="bg-emerald-600/20 p-2 rounded-lg">
+                  <MapPin className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <p className="font-medium text-sm">Share your location?</p>
+                  <p className="text-xs text-slate-400">So I can tell you about what&apos;s around you</p>
+                </div>
+              </div>
             </div>
             
             <div className="space-y-2">
@@ -276,7 +274,7 @@ function OnboardingModal({
                 onClick={() => onComplete(false, selectedGuide)}
                 className="w-full px-4 py-2 text-slate-400 hover:text-white rounded-xl text-sm transition"
               >
-                Maybe later
+                Skip for now
               </button>
             </div>
           </>
@@ -682,7 +680,7 @@ export default function Home() {
       </div>
       
       {/* Messages */}
-      <div className="pt-32 pb-32 px-4">
+      <div className="pt-40 pb-32 px-4">
         <div className="max-w-2xl mx-auto space-y-4">
           {messages.length === 0 && (
             <div className="text-center py-20">
@@ -908,16 +906,20 @@ export default function Home() {
                 className="hidden"
               />
               
-              {/* Voice input button */}
+              {/* Voice input button - hold to record */}
               {hasSpeechRecognition && (
                 <button
-                  onClick={isListening ? stopListening : startListening}
-                  className={`p-3 rounded-xl transition ${
-                    isListening ? 'bg-red-600 text-white animate-pulse' : 'bg-slate-700 hover:bg-slate-600'
+                  onMouseDown={startListening}
+                  onMouseUp={stopListening}
+                  onMouseLeave={isListening ? stopListening : undefined}
+                  onTouchStart={startListening}
+                  onTouchEnd={stopListening}
+                  className={`p-3 rounded-xl transition select-none ${
+                    isListening ? 'bg-red-600 text-white scale-110' : 'bg-slate-700 hover:bg-slate-600'
                   }`}
-                  title={isListening ? 'Stop listening' : 'Voice input'}
+                  title="Hold to speak"
                 >
-                  <Mic className="w-5 h-5" />
+                  <Mic className={`w-5 h-5 ${isListening ? 'animate-pulse' : ''}`} />
                 </button>
               )}
             </div>

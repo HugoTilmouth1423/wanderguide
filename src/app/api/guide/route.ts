@@ -19,6 +19,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { message, characterId, location, image } = body
     
+    // Check image size (base64 images can be huge)
+    if (image && image.length > 10 * 1024 * 1024) { // 10MB limit
+      return NextResponse.json({ 
+        error: 'Image too large', 
+        message: 'Please use a smaller image (max 10MB)' 
+      }, { status: 400 })
+    }
+    
     // Check usage limits
     if (user) {
       const { data: profile } = await supabase
@@ -160,8 +168,14 @@ Respond naturally and helpfully. Keep responses concise but informative (2-4 par
     
   } catch (error) {
     console.error('Guide API error:', error)
+    // Log more detail for debugging
+    if (error instanceof Error) {
+      console.error('Error name:', error.name)
+      console.error('Error message:', error.message)
+      console.error('Error stack:', error.stack)
+    }
     return NextResponse.json(
-      { error: 'Failed to generate response' },
+      { error: 'Failed to generate response', detail: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     )
   }
